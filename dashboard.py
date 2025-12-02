@@ -14,6 +14,7 @@ SIMULATION_MODE = True  # Set to False to use real Serial
 SERIAL_PORT = '/dev/ttyACM0' 
 BAUD_RATE = 115200
 ENABLE_POSITION_DAMPING = False # Set to True to prevent position drift (resets velocity)
+ACCELERATION_DEADZONE = 0.0 # Set a threshold for linear acceleration to reduce drift. 0.0 to disable.
 # ---------------------
 
 class Dashboard(QMainWindow):
@@ -146,17 +147,6 @@ class Dashboard(QMainWindow):
         if new_data is None:
             return # No data available
 
-        # Initialize local position variables for this frame
-        px, py, pz = 0, 0, 0
-
-        # If in simulation, generate the "Figure-8" path for demo visuals
-        if self.sensor_manager.simulation_mode:
-            # Access sim_t from the manager to stay in sync
-            t = self.sensor_manager.sim_t
-            px = np.sin(t * 0.5) * 10
-            py = np.cos(t * 0.5) * 10
-            pz = np.sin(t) * 2
-
         # --- 2. UPDATE 2D PLOTS ---
         # Update Buffers
         # Roll buffer back
@@ -224,9 +214,9 @@ class Dashboard(QMainWindow):
         az_w_linear = az_w - 9.81
         
         # Deadzone (Noise Reduction)
-        if abs(ax_w) < 0.5: ax_w = 0
-        if abs(ay_w) < 0.5: ay_w = 0
-        if abs(az_w_linear) < 0.5: az_w_linear = 0
+        if abs(ax_w) < ACCELERATION_DEADZONE: ax_w = 0
+        if abs(ay_w) < ACCELERATION_DEADZONE: ay_w = 0
+        if abs(az_w_linear) < ACCELERATION_DEADZONE: az_w_linear = 0
 
         # Integrate Acceleration -> Velocity
         self.vx += ax_w * dt
@@ -245,13 +235,8 @@ class Dashboard(QMainWindow):
         self.py += self.vy * dt
         self.pz += self.vz * dt
         
-        # If in simulation mode, we OVERRIDE this physics position with the figure-8 for demo purposes
-        if self.sensor_manager.simulation_mode:
-            # px, py, pz are already set at the top of update()
-            pass
-        else:
-            # Real Mode: Use the Physics Integrated values
-            px, py, pz = self.px, self.py, self.pz
+        # Use the Physics Integrated values for display
+        px, py, pz = self.px, self.py, self.pz
 
         for axis_item in self.axes_items:
             axis_item.resetTransform()

@@ -24,17 +24,21 @@ class SensorManager:
         or None if no data is available (waiting for serial).
         """
         if self.simulation_mode:
-            self.sim_t += 0.1
+            self.sim_t += 0.02 # Advance time slightly
             new_data = np.zeros(6)
-            # Simulate Acc (X, Y, Z) - sinusoidal
-            new_data[0] = np.sin(self.sim_t) * 9.81  # Acc X (simulating +/- 1g)
-            new_data[1] = np.cos(self.sim_t) * 9.81  # Acc Y
-            new_data[2] = -9.81 + np.sin(self.sim_t * 0.5) * 2  # Acc Z (gravity -9.81)
             
-            # Simulate Gyro (X, Y, Z) - noisy, in deg/s
-            new_data[3] = np.random.normal(0, 5) # Gyro X
-            new_data[4] = np.random.normal(0, 5) # Gyro Y
-            new_data[5] = 20 + np.random.normal(0, 2) # Gyro Z (constant rotation + noise)
+            # Simulate Steady Board with Noise (Real-world scenario)
+            # Acc: Gravity on Z (-9.81), others near 0
+            noise_level_acc = 0.05 # m/s^2
+            new_data[0] = np.random.normal(0, noise_level_acc)      # Acc X
+            new_data[1] = np.random.normal(0, noise_level_acc)      # Acc Y
+            new_data[2] = -9.81 + np.random.normal(0, noise_level_acc) # Acc Z
+            
+            # Gyro: Near 0 (stationary)
+            noise_level_gyro = 0.5 # degrees/s
+            new_data[3] = np.random.normal(0, noise_level_gyro) # Gyro X
+            new_data[4] = np.random.normal(0, noise_level_gyro) # Gyro Y
+            new_data[5] = np.random.normal(0, noise_level_gyro) # Gyro Z
             
             return new_data
         
