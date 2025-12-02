@@ -4,7 +4,7 @@ import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from pyqtgraph.dockarea import DockArea, Dock
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel
-from PyQt5.QtCore import QTimer
+from PyQt5.QtCore import QTimer, Qt
 import serial
 
 # --- CONFIGURATION ---
@@ -33,12 +33,10 @@ class Dashboard(QMainWindow):
         self.d_charts = Dock("Sensor Data (Acc & Gyro)", size=(800, 600))
 
         # 3. Layout Docks
-        # Place 3D dock first
-        self.area.addDock(self.d_3d, 'left')
-        # Place Controls under 3D
-        self.area.addDock(self.d_controls, 'bottom', self.d_3d)
-        # Place Charts to the right of the 3D/Control column
-        self.area.addDock(self.d_charts, 'right', self.d_3d)
+        # Strategy: Place the main right-side content first, then carve out the left side.
+        self.area.addDock(self.d_charts, 'right')     # Occupy full screen initially
+        self.area.addDock(self.d_3d, 'left', self.d_charts) # Split: Left(3D) | Right(Charts)
+        self.area.addDock(self.d_controls, 'bottom', self.d_3d) # Split Left: Top(3D) / Bottom(Controls)
 
         # --- LEFT PANEL CONTENT ---
         
@@ -180,6 +178,26 @@ class Dashboard(QMainWindow):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
+
+    # --- DARK PALETTE SETUP ---
+    from PyQt5.QtGui import QPalette, QColor
+    palette = QPalette()
+    palette.setColor(QPalette.Window, QColor(53, 53, 53))
+    palette.setColor(QPalette.WindowText, Qt.white)
+    palette.setColor(QPalette.Base, QColor(25, 25, 25))
+    palette.setColor(QPalette.AlternateBase, QColor(53, 53, 53))
+    palette.setColor(QPalette.ToolTipBase, Qt.white)
+    palette.setColor(QPalette.ToolTipText, Qt.white)
+    palette.setColor(QPalette.Text, Qt.white)
+    palette.setColor(QPalette.Button, QColor(53, 53, 53))
+    palette.setColor(QPalette.ButtonText, Qt.white)
+    palette.setColor(QPalette.BrightText, Qt.red)
+    palette.setColor(QPalette.Link, QColor(42, 130, 218))
+    palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
+    palette.setColor(QPalette.HighlightedText, Qt.black)
+    app.setPalette(palette)
+    # --------------------------
+
     dash = Dashboard()
     dash.show()
     sys.exit(app.exec_())
