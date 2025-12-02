@@ -64,7 +64,7 @@ class Dashboard(QMainWindow):
         
         # OPTION 2: Coordinate Axes (using GLLinePlotItem for custom thickness)
         line_thickness = 3 # Adjust as needed
-        axis_length = 5    # Same length as before
+        axis_length = 1    # Length 1 as requested
 
         self.axes_items = []
 

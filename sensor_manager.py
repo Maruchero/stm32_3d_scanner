@@ -28,11 +28,12 @@ class SensorManager:
             new_data = np.zeros(6)
             
             # Simulate Steady Board with Noise (Real-world scenario)
-            # Acc: Gravity on Z (-9.81), others near 0
+            # Acc: Gravity on Z (+9.81), others near 0
+            # Note: Standard IMUs read +1g on Z when flat.
             noise_level_acc = 0.05 # m/s^2
             new_data[0] = np.random.normal(0, noise_level_acc)      # Acc X
             new_data[1] = np.random.normal(0, noise_level_acc)      # Acc Y
-            new_data[2] = -9.81 + np.random.normal(0, noise_level_acc) # Acc Z
+            new_data[2] = 9.81 + np.random.normal(0, noise_level_acc) # Acc Z (Positive gravity)
             
             # Gyro: Near 0 (stationary)
             noise_level_gyro = 0.5 # degrees/s
