@@ -47,8 +47,10 @@ class SensorManager:
             if self.ser and self.ser.in_waiting:
                 try:
                     # Expecting CSV: "ax,ay,az,gx,gy,gz\n"
-                    line = self.ser.readline().decode().strip()
-                    parts = line.split(',')
+                    line = self.ser.read_until(expected=b";$").decode().strip()
+                    # print(line)
+                    parts = line.replace("\x00", "").split(";$")[0].split(' ')
+                    # print(parts)
                     if len(parts) == 6:
                         return np.array([float(x) for x in parts])
                     else:

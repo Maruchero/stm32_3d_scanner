@@ -10,11 +10,12 @@ import math
 import time
 
 # --- CONFIGURATION ---
-SIMULATION_MODE = True  # Set to False to use real Serial
+SIMULATION_MODE = False  # Set to False to use real Serial
 SERIAL_PORT = '/dev/ttyACM0' 
 BAUD_RATE = 115200
 ENABLE_POSITION_DAMPING = False # Set to True to prevent position drift (resets velocity)
-ACCELERATION_DEADZONE = 0.0 # Set a threshold for linear acceleration to reduce drift. 0.0 to disable.
+ACCELERATION_DEADZONE = 50 # Set a threshold for linear acceleration to reduce drift. 0.0 to disable.
+G = 1000  # Gravity constant in mm/s²
 # ---------------------
 
 class Dashboard(QMainWindow):
@@ -211,7 +212,7 @@ class Dashboard(QMainWindow):
                (c_p*c_r) * az
                
         # Remove Gravity (assuming World Z is Up, and Gravity is -9.81 relative to that)
-        az_w_linear = az_w - 9.81
+        az_w_linear = az_w - G
         
         # Deadzone (Noise Reduction)
         if abs(ax_w) < ACCELERATION_DEADZONE: ax_w = 0
