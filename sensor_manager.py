@@ -8,6 +8,7 @@ class SensorManager:
         self.simulation_mode = simulation_mode
         self.ser = None
         self.sim_t = 0
+        self.buffer = "" # Persistent buffer for serial data
 
         if not self.simulation_mode:
             try:
@@ -46,27 +47,53 @@ class SensorManager:
         else:
             if self.ser and self.ser.in_waiting:
                 try:
-                    # Expecting format: "$ax ay az gx gy gz;"
-                    line = self.ser.readline().decode().strip()
+                    # Read everything currently in the hardware buffer
+                    raw_data = self.ser.read(self.ser.in_waiting)
+                    text_data = raw_data.decode('utf-8', errors='ignore')
+                    self.buffer += text_data
                     
-                    # Remove start and end delimiters
-                    if line.startswith('$') and line.endswith(';'):
-                        line = line[1:-1] # Strip '$' and ';'
-                    else:
-                        # Malformed start/end, skip
-                        print("Malformed start/end", line)
-                        return None 
+                    # Process packets in the buffer
+                    last_valid_packet = None
+                    
+                    while True:
+                        # Find next delimiter pair
+                        start_idx = self.buffer.find('$')
+                        end_idx = self.buffer.find(';')
                         
-                    parts = line.split(' ') # Split by space
-                    
-                    if len(parts) == 6:
-                        return np.array([float(x) for x in parts])
-                    else:
-                        # Malformed line (wrong number of parts)
-                        print("Malformed line parts", line)
-                        return None
+                        # If we have a start but it's AFTER the end (e.g. "...; $..."), 
+                        # we must discard the garbage before the '$'
+                        if start_idx != -1 and end_idx != -1 and start_idx > end_idx:
+                            # Discard everything up to the ';' we found (it's an orphan end)
+                            self.buffer = self.buffer[end_idx+1:]
+                            continue
+
+                        if start_idx != -1 and end_idx != -1:
+                            # We have a potentially valid packet "$...;"
+                            packet_str = self.buffer[start_idx+1 : end_idx]
+                            
+                            # Remove this packet from buffer
+                            self.buffer = self.buffer[end_idx+1:]
+                            
+                            # Parse this packet
+                            try:
+                                parts = packet_str.split(' ')
+                                parts = [p for p in parts if p] # Filter empty
+                                if len(parts) == 6:
+                                    last_valid_packet = np.array([float(x) for x in parts])
+                            except ValueError:
+                                pass # parsing failed, move to next
+                        else:
+                            # No complete packet found yet
+                            break
+                            
+                    # If buffer gets too huge (no delimiters found), clear it to prevent memory leak
+                    if len(self.buffer) > 1000:
+                        self.buffer = ""
+                        
+                    return last_valid_packet
+
                 except Exception as e:
-                    print(f"Serial Parse Error: {e}")
+                    print(f"Serial Read Error: {e}")
                     return None
             else:
                 return None

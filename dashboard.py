@@ -10,11 +10,12 @@ import math
 import time
 
 # --- CONFIGURATION ---
-SIMULATION_MODE = True  # Set to False to use real Serial
+SIMULATION_MODE = False  # Set to False to use real Serial
 SERIAL_PORT = '/dev/ttyACM0' 
 BAUD_RATE = 115200
 ENABLE_POSITION_DAMPING = False # Set to True to prevent position drift (resets velocity)
 ACCELERATION_DEADZONE = 0.0 # Set a threshold for linear acceleration to reduce drift. 0.0 to disable.
+G = 1000  # Gravity in mg
 # ---------------------
 
 class Dashboard(QMainWindow):
@@ -146,6 +147,10 @@ class Dashboard(QMainWindow):
         
         if new_data is None:
             return # No data available
+            
+        # DEBUG LOGGING
+        with open("debug_log.txt", "a") as f:
+            f.write(f"{new_data[0]:.4f}, {new_data[1]:.4f}, {new_data[2]:.4f}, {new_data[3]:.4f}, {new_data[4]:.4f}, {new_data[5]:.4f}\n")
 
         # --- 2. UPDATE 2D PLOTS ---
         # Update Buffers
@@ -211,7 +216,7 @@ class Dashboard(QMainWindow):
                (c_p*c_r) * az
                
         # Remove Gravity (assuming World Z is Up, and Gravity is -9.81 relative to that)
-        az_w_linear = az_w - 9.81
+        az_w_linear = az_w - G
         
         # Deadzone (Noise Reduction)
         if abs(ax_w) < ACCELERATION_DEADZONE: ax_w = 0
