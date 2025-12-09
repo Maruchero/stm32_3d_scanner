@@ -3,7 +3,7 @@ import numpy as np
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from pyqtgraph.dockarea import DockArea, Dock
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QStackedWidget, QPushButton
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel
 from PyQt5.QtCore import QTimer, Qt
 from sensor_manager import SensorManager # Refactored data source
 from views.acc_gyro_view import AccGyroView # New view for 2D plots
@@ -92,26 +92,29 @@ class Dashboard(QMainWindow):
         self.w_controls = QWidget()
         layout = QVBoxLayout()
         layout.addWidget(QLabel("Controls"))
-        
-        self.btn_switch = QPushButton("Switch View")
-        self.btn_switch.clicked.connect(self.toggle_view)
-        layout.addWidget(self.btn_switch)
-        
         layout.addStretch()
         self.w_controls.setLayout(layout)
         self.d_controls.addWidget(self.w_controls)
 
-        # --- RIGHT PANEL CONTENT (STACKED VIEWS) ---
-        self.stack = QStackedWidget()
-        self.d_charts.addWidget(self.stack)
-        
-        # View 0: Acc/Gyro
+        # --- RIGHT PANEL CONTENT (DOCKS) ---
+        # Dock 1: Acc/Gyro
+        self.d_acc_gyro = Dock("Acc & Gyro", size=(800, 600))
         self.acc_gyro_view = AccGyroView(self)
-        self.stack.addWidget(self.acc_gyro_view)
+        self.d_acc_gyro.addWidget(self.acc_gyro_view)
         
-        # View 1: Magnetometer
+        # Dock 2: Magnetometer
+        self.d_magnetometer = Dock("Magnetometer", size=(800, 600))
         self.magnetometer_view = MagnetometerView(self)
-        self.stack.addWidget(self.magnetometer_view)
+        self.d_magnetometer.addWidget(self.magnetometer_view)
+
+        # Layout Docks:
+        # 1. Add Acc/Gyro to the right of 3D view
+        self.area.addDock(self.d_acc_gyro, 'right', self.d_3d)
+        
+        # 2. Add Magnetometer. 
+        # By adding it 'above' the Acc/Gyro dock, we split the right panel vertically.
+        # Users can drag the title bar of one onto the other to create tabs if they prefer.
+        self.area.addDock(self.d_magnetometer, 'above', self.d_acc_gyro)
 
         # --- DATA STREAM SETUP ---
         # Initialize Sensor Manager using global config
@@ -122,13 +125,6 @@ class Dashboard(QMainWindow):
         self.timer.start(20) # 50 Hz update rate
         
         self.sim_t = 0
-
-    def toggle_view(self):
-        current = self.stack.currentIndex()
-        if current == 0:
-            self.stack.setCurrentIndex(1) # Switch to Mag
-        else:
-            self.stack.setCurrentIndex(0) # Switch to Acc/Gyro
 
     def update(self):
         # --- 1. GET NEW SENSOR DATA ---
@@ -141,17 +137,13 @@ class Dashboard(QMainWindow):
         # Acc/Gyro = indices 0-5
         # Mag = indices 6-8
         
-        # --- 2. UPDATE VISIBLE PLOTS ---
-        current_view = self.stack.currentIndex()
+        # --- 2. UPDATE PLOTS ---
+        # Update Acc/Gyro View
+        self.acc_gyro_view.update_view(new_data[:6])
         
-        if current_view == 0:
-            # Update Acc/Gyro View
-            self.acc_gyro_view.update_view(new_data[:6])
-        elif current_view == 1:
-            # Update Magnetometer View
-            # Check if we actually have 9 elements (compatibility check)
-            if len(new_data) >= 9:
-                self.magnetometer_view.update_view(new_data[6:9])
+        # Update Magnetometer View (if data available)
+        if len(new_data) >= 9:
+            self.magnetometer_view.update_view(new_data[6:9])
 
         # --- 3. CALCULATE ORIENTATION (Pitch, Roll, Yaw) ---
         ax, ay, az = new_data[0], new_data[1], new_data[2]
