@@ -3,10 +3,11 @@ import numpy as np
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from pyqtgraph.dockarea import DockArea, Dock
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QStackedWidget, QPushButton
 from PyQt5.QtCore import QTimer, Qt
 from sensor_manager import SensorManager # Refactored data source
 from views.acc_gyro_view import AccGyroView # New view for 2D plots
+from views.magnetometer_view import MagnetometerView # New view for Mag
 import math 
 import time
 
@@ -90,18 +91,27 @@ class Dashboard(QMainWindow):
         # Controls (Empty for now)
         self.w_controls = QWidget()
         layout = QVBoxLayout()
-        layout.addWidget(QLabel("Controls Section (Placeholder)"))
+        layout.addWidget(QLabel("Controls"))
+        
+        self.btn_switch = QPushButton("Switch View")
+        self.btn_switch.clicked.connect(self.toggle_view)
+        layout.addWidget(self.btn_switch)
+        
         layout.addStretch()
         self.w_controls.setLayout(layout)
         self.d_controls.addWidget(self.w_controls)
 
-        # --- RIGHT PANEL CONTENT (6 CHARTS) ---
+        # --- RIGHT PANEL CONTENT (STACKED VIEWS) ---
+        self.stack = QStackedWidget()
+        self.d_charts.addWidget(self.stack)
+        
+        # View 0: Acc/Gyro
         self.acc_gyro_view = AccGyroView(self)
-        self.d_charts.addWidget(self.acc_gyro_view)
-            
-        # Data buffers for 6 channels - MOVED TO ACCGYROVIEW
-        # self.history_length = 200
-        # self.data_buffer = np.zeros((6, self.history_length))
+        self.stack.addWidget(self.acc_gyro_view)
+        
+        # View 1: Magnetometer
+        self.magnetometer_view = MagnetometerView(self)
+        self.stack.addWidget(self.magnetometer_view)
 
         # --- DATA STREAM SETUP ---
         # Initialize Sensor Manager using global config
@@ -111,7 +121,14 @@ class Dashboard(QMainWindow):
         self.timer.timeout.connect(self.update)
         self.timer.start(20) # 50 Hz update rate
         
-        self.sim_t = 0 # Now managed by SensorManager
+        self.sim_t = 0
+
+    def toggle_view(self):
+        current = self.stack.currentIndex()
+        if current == 0:
+            self.stack.setCurrentIndex(1) # Switch to Mag
+        else:
+            self.stack.setCurrentIndex(0) # Switch to Acc/Gyro
 
     def update(self):
         # --- 1. GET NEW SENSOR DATA ---
@@ -121,13 +138,20 @@ class Dashboard(QMainWindow):
             return # No data available
             
         # Handle 9-axis data (Acc, Gyro, Mag)
-        # We currently only use the first 6 for plots and physics (Acc, Gyro)
-        # Mag data (indices 6,7,8) is available for future Compass Mode
-        plot_data = new_data[:6]
-
-        # --- 2. UPDATE 2D PLOTS ---
-        # Delegate to AccGyroView
-        self.acc_gyro_view.update_view(new_data[:6])
+        # Acc/Gyro = indices 0-5
+        # Mag = indices 6-8
+        
+        # --- 2. UPDATE VISIBLE PLOTS ---
+        current_view = self.stack.currentIndex()
+        
+        if current_view == 0:
+            # Update Acc/Gyro View
+            self.acc_gyro_view.update_view(new_data[:6])
+        elif current_view == 1:
+            # Update Magnetometer View
+            # Check if we actually have 9 elements (compatibility check)
+            if len(new_data) >= 9:
+                self.magnetometer_view.update_view(new_data[6:9])
 
         # --- 3. CALCULATE ORIENTATION (Pitch, Roll, Yaw) ---
         ax, ay, az = new_data[0], new_data[1], new_data[2]
