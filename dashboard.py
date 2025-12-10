@@ -13,7 +13,7 @@ import math
 import time
 
 # --- CONFIGURATION ---
-SIMULATION_MODE = True  # Set to False to use real Serial
+SIMULATION_MODE = False  # Set to False to use real Serial
 SERIAL_PORT = '/dev/ttyACM0' 
 BAUD_RATE = 115200
 ENABLE_POSITION_DAMPING = False # Set to True to prevent position drift (resets velocity)

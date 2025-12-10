@@ -64,58 +64,44 @@ class SensorManager:
         else:
             if self.ser and self.ser.in_waiting:
                 try:
-                    # Read everything currently in the hardware buffer
-                    raw_data = self.ser.read(self.ser.in_waiting)
-                    text_data = raw_data.decode('utf-8', errors='ignore')
-                    self.buffer += text_data
+                    # Expecting format: "ax,ay,az,gx,gy,gz\n\r"
+                    # readline() reads until \n
+                    raw_bytes = self.ser.readline()
+                    # Decode and handle null bytes/garbage
+                    line = raw_bytes.decode('utf-8', errors='ignore').replace('\x00', '').strip()
                     
-                    # Process packets in the buffer
-                    last_valid_packet = None
+                    if not line:
+                        return None
+
+                    # Split by comma
+                    parts = line.split(',')
                     
-                    while True:
-                        # Find next delimiter pair
-                        start_idx = self.buffer.find('$')
-                        end_idx = self.buffer.find(';')
+                    if len(parts) == 6:
+                        # Parse 6 raw values (mg, mdps)
+                        raw_data = [float(x) for x in parts]
                         
-                        if start_idx != -1 and end_idx != -1 and start_idx > end_idx:
-                            self.buffer = self.buffer[end_idx+1:]
-                            continue
-
-                        if start_idx != -1 and end_idx != -1:
-                            packet_str = self.buffer[start_idx+1 : end_idx]
-                            self.buffer = self.buffer[end_idx+1:]
-                            
-                            try:
-                                parts = packet_str.split(' ')
-                                parts = [p for p in parts if p] # Filter empty
-                                
-                                packet_data = None
-                                if len(parts) == 6:
-                                    # Backward compatibility: 6-axis
-                                    data = [float(x) for x in parts]
-                                    data.extend([0.0, 0.0, 0.0])
-                                    packet_data = np.array(data)
-                                elif len(parts) == 9:
-                                    packet_data = np.array([float(x) for x in parts])
-                                
-                                if packet_data is not None:
-                                    # Convert Raw (mg, mdps) to SI (m/s^2, deg/s)
-                                    packet_data[0:3] *= self.MG_TO_MS2
-                                    packet_data[3:6] *= self.MDPS_TO_DPS
-                                    last_valid_packet = packet_data
-                                    
-                            except ValueError:
-                                pass 
-                        else:
-                            break
-                            
-                    if len(self.buffer) > 1000:
-                        self.buffer = ""
+                        # Prepare 9-element SI array
+                        si_data = np.zeros(9)
                         
-                    return last_valid_packet
-
+                        # Convert Acc (indices 0-2) from mg to m/s^2
+                        si_data[0] = raw_data[0] * self.MG_TO_MS2
+                        si_data[1] = raw_data[1] * self.MG_TO_MS2
+                        si_data[2] = raw_data[2] * self.MG_TO_MS2
+                        
+                        # Convert Gyro (indices 3-5) from mdps to deg/s
+                        si_data[3] = raw_data[3] * self.MDPS_TO_DPS
+                        si_data[4] = raw_data[4] * self.MDPS_TO_DPS
+                        si_data[5] = raw_data[5] * self.MDPS_TO_DPS
+                        
+                        # Mag (indices 6-8) remains 0.0
+                        
+                        return si_data
+                    else:
+                        # Malformed line (wrong number of parts)
+                        # print("Malformed line parts:", parts) # Optional debug
+                        return None
                 except Exception as e:
-                    print(f"Serial Read Error: {e}")
+                    print(f"Serial Parse Error: {e}")
                     return None
             else:
                 return None
