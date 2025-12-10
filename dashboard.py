@@ -6,21 +6,23 @@ from pyqtgraph.dockarea import DockArea, Dock
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel
 from PyQt5.QtCore import QTimer, Qt
 from sensor_manager import SensorManager # Refactored data source
+from views.acc_gyro_view import AccGyroView # New view for 2D plots
+from views.magnetometer_view import MagnetometerView # New view for Mag
 import math 
 import time
 
 # --- CONFIGURATION ---
-SIMULATION_MODE = False  # Set to False to use real Serial
+SIMULATION_MODE = True  # Set to False to use real Serial
 SERIAL_PORT = '/dev/ttyACM0' 
 BAUD_RATE = 115200
 ENABLE_POSITION_DAMPING = False # Set to True to prevent position drift (resets velocity)
 ACCELERATION_DEADZONE = 50 # Set a threshold for linear acceleration to reduce drift. 0.0 to disable.
-G = 1000  # Gravity constant in mm/s²
+G = 9.81  # Gravity constant in mm/s²
 # ---------------------
 
 class Dashboard(QMainWindow):
     def __init__(self):
-        global SIMULATION_MODE
+        global SIMULATION_MODE  # DO NOT REMOVE THIS LINE, it's necessary
         super().__init__()
         self.setWindowTitle("6-Axis Sensor Dashboard")
         self.resize(1200, 800)
@@ -43,13 +45,23 @@ class Dashboard(QMainWindow):
         self.d_controls = Dock("Controls", size=(400, 200))
         
         # Right side (approx 2/3 width)
-        self.d_charts = Dock("Sensor Data (Acc & Gyro)", size=(800, 600))
-
+        self.d_acc_gyro = Dock("Acc & Gyro", size=(800, 600))
+        self.d_magnetometer = Dock("Magnetometer", size=(800, 600))
+        
         # 3. Layout Docks
         # Strategy: Place the main right-side content first, then carve out the left side.
-        self.area.addDock(self.d_charts, 'right')     # Occupy full screen initially
-        self.area.addDock(self.d_3d, 'left', self.d_charts) # Split: Left(3D) | Right(Charts)
-        self.area.addDock(self.d_controls, 'bottom', self.d_3d) # Split Left: Top(3D) / Bottom(Controls)
+        
+        # Add Acc/Gyro to the right, which will form the main right panel
+        self.area.addDock(self.d_acc_gyro, 'right') 
+        
+        # Add Magnetometer above Acc/Gyro (splits right panel vertically)
+        self.area.addDock(self.d_magnetometer, 'above', self.d_acc_gyro)
+        
+        # Add 3D view to the left of the Acc/Gyro block
+        self.area.addDock(self.d_3d, 'left', self.d_acc_gyro) 
+        
+        # Add Controls under 3D
+        self.area.addDock(self.d_controls, 'bottom', self.d_3d)
 
         # --- LEFT PANEL CONTENT ---
         
@@ -89,47 +101,19 @@ class Dashboard(QMainWindow):
         # Controls (Empty for now)
         self.w_controls = QWidget()
         layout = QVBoxLayout()
-        layout.addWidget(QLabel("Controls Section (Placeholder)"))
+        layout.addWidget(QLabel("Controls"))
         layout.addStretch()
         self.w_controls.setLayout(layout)
         self.d_controls.addWidget(self.w_controls)
 
-        # --- RIGHT PANEL CONTENT (6 CHARTS) ---
-        self.w_charts = pg.GraphicsLayoutWidget()
-        self.d_charts.addWidget(self.w_charts)
-
-        # Create 6 plots in a 2-column x 3-row grid
-        # Col 1: Accelerometer, Col 2: Gyroscope
-        self.plots = []
-        self.curves = []
+        # --- RIGHT PANEL CONTENT (VIEW WIDGETS) ---
+        # View 1: Acc/Gyro
+        self.acc_gyro_view = AccGyroView(self)
+        self.d_acc_gyro.addWidget(self.acc_gyro_view)
         
-        # Titles
-        titles = [
-            ("Acc X", "Acc Y", "Acc Z"),
-            ("Gyro X", "Gyro Y", "Gyro Z")
-        ]
-        
-        # We want:
-        # Acc X | Gyro X
-        # Acc Y | Gyro Y
-        # Acc Z | Gyro Z
-        
-        for row in range(3):
-            row_plots = []
-            for col in range(2):
-                title = titles[col][row]
-                # Add plot to layout
-                p = self.w_charts.addPlot(row=row, col=col, title=title)
-                p.showGrid(x=True, y=True)
-                # Create a curve
-                c = p.plot(pen=(col+1, 3)) # Different color for Acc vs Gyro
-                
-                self.plots.append(p)
-                self.curves.append(c)
-            
-        # Data buffers for 6 channels
-        self.history_length = 200
-        self.data_buffer = np.zeros((6, self.history_length))
+        # View 2: Magnetometer
+        self.magnetometer_view = MagnetometerView(self)
+        self.d_magnetometer.addWidget(self.magnetometer_view)
 
         # --- DATA STREAM SETUP ---
         # Initialize Sensor Manager using global config
@@ -147,22 +131,18 @@ class Dashboard(QMainWindow):
         
         if new_data is None:
             return # No data available
-
-        # --- 2. UPDATE 2D PLOTS ---
-        # Update Buffers
-        # Roll buffer back
-        self.data_buffer = np.roll(self.data_buffer, -1, axis=1)
-        # Insert new data at the end
-        self.data_buffer[:, -1] = new_data
-
-        # Update Curves
-        # Map: 0=AccX, 1=AccY, 2=AccZ, 3=GyroX, 4=GyroY, 5=GyroZ
-        # Curve order: AccX, GyroX, AccY, GyroY, AccZ, GyroZ
-        mapping = [0, 3, 1, 4, 2, 5]
+            
+        # Handle 9-axis data (Acc, Gyro, Mag)
+        # Acc/Gyro = indices 0-5
+        # Mag = indices 6-8
         
-        for i, curve in enumerate(self.curves):
-            data_index = mapping[i]
-            curve.setData(self.data_buffer[data_index])
+        # --- 2. UPDATE PLOTS ---
+        # Update Acc/Gyro View
+        self.acc_gyro_view.update_view(new_data[:6])
+        
+        # Update Magnetometer View (if data available)
+        if len(new_data) >= 9:
+            self.magnetometer_view.update_view(new_data[6:9])
 
         # --- 3. CALCULATE ORIENTATION (Pitch, Roll, Yaw) ---
         ax, ay, az = new_data[0], new_data[1], new_data[2]
