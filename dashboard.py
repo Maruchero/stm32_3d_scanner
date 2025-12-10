@@ -22,7 +22,7 @@ G = 9.81  # Gravity constant in mm/s²
 
 class Dashboard(QMainWindow):
     def __init__(self):
-        global SIMULATION_MODE
+        global SIMULATION_MODE  # DO NOT REMOVE THIS LINE, it's necessary
         super().__init__()
         self.setWindowTitle("6-Axis Sensor Dashboard")
         self.resize(1200, 800)
@@ -45,13 +45,23 @@ class Dashboard(QMainWindow):
         self.d_controls = Dock("Controls", size=(400, 200))
         
         # Right side (approx 2/3 width)
-        self.d_charts = Dock("Sensor Data (Acc & Gyro)", size=(800, 600))
-
+        self.d_acc_gyro = Dock("Acc & Gyro", size=(800, 600))
+        self.d_magnetometer = Dock("Magnetometer", size=(800, 600))
+        
         # 3. Layout Docks
         # Strategy: Place the main right-side content first, then carve out the left side.
-        self.area.addDock(self.d_charts, 'right')     # Occupy full screen initially
-        self.area.addDock(self.d_3d, 'left', self.d_charts) # Split: Left(3D) | Right(Charts)
-        self.area.addDock(self.d_controls, 'bottom', self.d_3d) # Split Left: Top(3D) / Bottom(Controls)
+        
+        # Add Acc/Gyro to the right, which will form the main right panel
+        self.area.addDock(self.d_acc_gyro, 'right') 
+        
+        # Add Magnetometer above Acc/Gyro (splits right panel vertically)
+        self.area.addDock(self.d_magnetometer, 'above', self.d_acc_gyro)
+        
+        # Add 3D view to the left of the Acc/Gyro block
+        self.area.addDock(self.d_3d, 'left', self.d_acc_gyro) 
+        
+        # Add Controls under 3D
+        self.area.addDock(self.d_controls, 'bottom', self.d_3d)
 
         # --- LEFT PANEL CONTENT ---
         
@@ -96,25 +106,14 @@ class Dashboard(QMainWindow):
         self.w_controls.setLayout(layout)
         self.d_controls.addWidget(self.w_controls)
 
-        # --- RIGHT PANEL CONTENT (DOCKS) ---
-        # Dock 1: Acc/Gyro
-        self.d_acc_gyro = Dock("Acc & Gyro", size=(800, 600))
+        # --- RIGHT PANEL CONTENT (VIEW WIDGETS) ---
+        # View 1: Acc/Gyro
         self.acc_gyro_view = AccGyroView(self)
         self.d_acc_gyro.addWidget(self.acc_gyro_view)
         
-        # Dock 2: Magnetometer
-        self.d_magnetometer = Dock("Magnetometer", size=(800, 600))
+        # View 2: Magnetometer
         self.magnetometer_view = MagnetometerView(self)
         self.d_magnetometer.addWidget(self.magnetometer_view)
-
-        # Layout Docks:
-        # 1. Add Acc/Gyro to the right of 3D view
-        self.area.addDock(self.d_acc_gyro, 'right', self.d_3d)
-        
-        # 2. Add Magnetometer. 
-        # By adding it 'above' the Acc/Gyro dock, we split the right panel vertically.
-        # Users can drag the title bar of one onto the other to create tabs if they prefer.
-        self.area.addDock(self.d_magnetometer, 'above', self.d_acc_gyro)
 
         # --- DATA STREAM SETUP ---
         # Initialize Sensor Manager using global config
